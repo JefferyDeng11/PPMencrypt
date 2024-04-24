@@ -1,0 +1,23 @@
+.data
+    input_file db 'input.txt', 0
+    output_file db 'output.ppm', 0
+    buffer db 256  ; Buffer for reading characters from file
+    key db 0x42    ; Encryption key
+
+section .bss
+    pixels resb 10000  ; Reserve space for pixel data
+
+.code
+    ; Open text file for reading
+    mov eax, 5          ; sys_open system call
+    mov ebx, input_file
+    mov ecx, 0          ; O_RDONLY flag
+    int 0x80            ; Call kernel
+
+    ; Read from file
+    ; Continue with reading, encryption, ppm file creation, etc.
+
+    ; Exit program
+    mov eax, 1          ; sys_exit system call
+    xor ebx, ebx        ; Return 0 status
+    int 0x80
