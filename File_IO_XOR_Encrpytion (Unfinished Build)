@@ -179,7 +179,25 @@ END main
 ;XOR ENCYRPTION DONE HERE TO PREVENT BLOATING AND PROVIDES FOR DYNAMIC PROGRAMMING
 ;WHILE LOOP, DEPENDS ON HOW MANY BYTES READ FROM FILE. XOR EACH BYTE IN BUFFER
 
+
 XOR_Encrypt:
+    mov     ESI, OFFSET BUFFER     ;MOVING OUR POINTER TO THE BUFFER, AS WELL AS SETTING UP OUR LOOP  
+    mov     EDX, OFFSET userKey    
+    mov     ECX, [bytesRead]       
+
+EncryptLoop:
+    cmp     ECX, 0                 ;END IF ALL BYTES PROCESSED
+    je      EncryptDone            
+
+    mov     EAX, [ESI]              ;BYTE FROM BUFFER       
+    xor     [EAX], EDX              ;XOR the byte
+    mov     [ESI], EDX              ;PUT BACK IN BUFFER
+
+    inc     ESI                    ; NEXT BYTE 
+
+EncryptDone:
+    ret
+
 	
 
 
