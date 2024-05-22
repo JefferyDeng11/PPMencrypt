@@ -43,8 +43,9 @@ BUFFER_SIZE		=		5000
 	;DATA THAT IS INPUT, MANIPULATED, OR READ
 	;///////////////////////////////////////////////////////////////////////////////////////////////
 
+
 	;Congruency
-	BUFFER		DWORD	BUFFER_SIZE		DUP(?)
+	BUFFER		BYTE	BUFFER_SIZE		DUP(?)
 
 	;File handler
 	filename	BYTE	80	DUP	(0)
@@ -66,7 +67,6 @@ BUFFER_SIZE		=		5000
 
 	BUFFERERROR			BYTE	"Buffer is too small for a file of this size.", 00h
 	BUFFERERRORSIZE		DWORD	($ - BUFFERERROR)
-
 
 
 	;///////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,7 +105,7 @@ main proc
 		push	OPEN_EXISTING										;DO NOT MAKE NEW
 		push	0
 		push	0
-		push	FILE_READ_DATA										;OPEN FOR READING
+		push	FILE_SHARE_READ										;OPEN FOR READING
 		push	OFFSET filename
 		call	CreateFileA											;ATTEMPTS OPENING, MOVES FILEHANDLER INTO EAX, IF VALID, WILL BE FILEHANDLER TO NAVIGATE THE FILE WITH
 		mov		fileHandle, EAX
@@ -142,10 +142,6 @@ main proc
 		call	crlf
 		jmp		getUserFile
 
-	;CLOSE THE FILE
-	mov		EAX,	fileHandle
-	call	CloseFile
-
 	;TELLS USER TO INPUT THEIR KEY
 	inputKey:
 		xor		EDX,	EDX
@@ -165,6 +161,7 @@ main proc
 	mov		EDX,	OFFSET	encryptPrompt							;LETS GET THE USER KEY
 	call	WriteString
 	call	crlf
+	call	crlf
 
 	;XOR ENCRYPTION BASIC
 		xor		EBX,	EBX											;PREP REGISTERS
@@ -178,17 +175,17 @@ main proc
 		mov		EDI,	OFFSET		userKey
 
 	XOR_Encrypt:
-		mov		EBX,	[EDI]
-		xor		[ESI],	EBX
+		mov		BL,		[EDI]
+		xor		[ESI],	BL
 
-		inc		ESI												;INCREMENT BUFFER ARR
-		inc		EAX												;INCREMENT THE KEY COUNT
+		inc		ESI													;INCREMENT BUFFER ARR
+		inc		EAX													;INCREMENT THE KEY COUNT
 		cmp		EAX,	[userKeySize]
 		je		resetKeyCount
 		jmp		skipReset
 
 		resetKeyCount:
-			xor		EAX,	EAX
+			mov		EAX,	0
 			mov		EDI,	OFFSET		userKey
 			jmp		endOfXOR
 
@@ -196,25 +193,60 @@ main proc
 			inc		EDI
 
 		endOfXOR:
-		;END OF STATEMENTS
-		dec		ECX
-		jnz		XOR_Encrypt
+			;END OF STATEMENTS
+			dec		ECX
+			jnz		XOR_Encrypt
 
-		xor		EDX,	EDX	
-		mov		EDX,	OFFSET	BUFFER								
-		call	WriteString											
+	;SANITY
+		xor		EDX,	EDX
+		mov		EDX,	OFFSET	BUFFER							;LETS GET THE USER KEY
+		call	WriteString
 		call	crlf
+
+	;CLOSE FILE
+	push	fileHandle
+	call	CloseHandle
+	xor		EAX,	EAX
+
+
+	;OPEN FILE FOR WRITING
+		push	0
+		push	FILE_ATTRIBUTE_NORMAL				
+		push	OPEN_EXISTING										;DO NOT MAKE NEW
+		push	0
+		push	0
+		push	FILE_SHARE_WRITE									;OPEN FOR READING
+		push	OFFSET filename
+		call	CreateFileA											;ATTEMPTS OPENING, MOVES FILEHANDLER INTO EAX, IF VALID, WILL BE FILEHANDLER TO NAVIGATE THE FILE WITH
+		mov		fileHandle, EAX
+
+	;SETTING THE FILE POINTER
+		push	FILE_BEGIN
+		push	0
+		push	0
+		push	fileHandle
+		call	SetFilePointer
+
+	;WRITING BUFFER TO FILE
+		push	0
+		push	0	
+		push	bytesRead											;HOW MANY BYTES TO BE WRITTEN
+		push	OFFSET	BUFFER										;BUFFER TO WRITE INTO FILE
+		push	fileHandle
+		call	WriteFile
+
+	;CLOSE FILE
+	push	fileHandle
+	call	CloseHandle
 
 	;EXITS THE ENTIRE PROGRAM
 	exitProgram:
-
+	call	crlf
 	xor		EDX,	EDX	
-	mov		EDX,	OFFSET	goodbyePrompt								
-	call	WriteString											
+	mov		EDX,	OFFSET	goodbyePrompt								 
 	call	crlf
 
 ;MAIN CODE ENDS HERE
 INVOKE ExitProcess, 0
 main ENDP
 END main
-
