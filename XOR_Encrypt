@@ -1,0 +1,252 @@
+;MASMTest.asm a test bench for MASM Code
+INCLUDELIB	Irvine32.lib
+INCLUDE		Irvine32.inc
+
+.386
+.MODEL FLAT, stdcall
+.stack 4096
+
+ExitProcess PROTO, dwExitCode:DWORD
+
+BUFFER_SIZE		=		5000
+
+.data
+;DATA VARIABLES GO HERE
+
+	;///////////////////////////////////////////////////////////////////////////////////////////////
+	;Message Prompts
+	;;///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	welcomePrompt		BYTE	"Welcome to the program.", 00h
+	welcomeSize			DWORD	($ - welcomePrompt)
+
+	goodbyePrompt		BYTE	"Program ending, have a great day!", 00h
+	goodbyeSize			DWORD	($ - goodbyePrompt)
+
+	bytereadPrompt 		BYTE 	"number of bytes read: ", 00h
+	readSize			DWORD	($ - bytereadPrompt)
+
+	filenamePrompt		BYTE	"Enter the name of the file you want to encrypt please (Enter 0 to exit program): ", 00h
+	filenameSize		DWORD	($-filenamePrompt)
+
+	fileOpenErrPrompt	BYTE	"Could not open a file of that name. Please try again", 00h
+
+	keyPrompt 			BYTE	"please enter a key to encrypt your file:", 00h
+	keySize				DWORD	($-keyPrompt)
+
+	encryptPrompt 		BYTE	 "Now encrypting/decrypting ",0h
+	toPrompt 			BYTE 	 " to ",0h
+
+
+	;///////////////////////////////////////////////////////////////////////////////////////////////
+	;DATA THAT IS INPUT, MANIPULATED, OR READ
+	;///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	;Congruency
+	BUFFER		BYTE	BUFFER_SIZE		DUP(?)
+
+	;File handler
+	filename	BYTE	80	DUP	(0)
+	fileHandle	HANDLE	0
+
+	userKey		BYTE	255	DUP (0)
+	userKeySize	DWORD	0
+
+	bytesRead	DWORD	0
+
+
+	;///////////////////////////////////////////////////////////////////////////////////////////////
+	;ERROR PROMPTS
+	;///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+	READERROR			BYTE	"Error Reading From File.", 00h
+	READERRORSIZE		DWORD	($ - READERROR)
+
+	BUFFERERROR			BYTE	"Buffer is too small for a file of this size.", 00h
+	BUFFERERRORSIZE		DWORD	($ - BUFFERERROR)
+
+
+	;///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+;DATA VARIABLES GO HERE
+
+.code
+main proc
+;MAIN CODE HERE
+
+	;WELCOMES THE USER
+	xor		EDX,	EDX
+	mov		EDX,	OFFSET	welcomePrompt
+	call	WriteString
+	call	crlf
+
+	;PROMPTS FOR FILENAME INPUT
+	getUserFile:
+		xor		EDX,	EDX
+		xor		ECX,	ECX
+		mov		EDX,	OFFSET	filenamePrompt						;ENTER FILENAME IF INVALID, LOOP
+		call	WriteString											;OUTPUT FOR PROMPT
+
+		;GETS INPUT FOR FILENAME
+		mov		EDX,	OFFSET	filename
+		mov		ECX,	SIZEOF	filename
+		call	ReadString											;READ STRING INPUT FOR FILENAME
+		call	crlf
+		cmp		[filename], '0'
+		jz		exitProgram
+
+		;OPEN THE FILE												;USING MASM32 WINDOWS OS INSTRUCTIONS. IRVINE32 OPENFILE DOESN'T WORK. I WILL STILL USE THEIR LIB BECAUSE IM LAZY
+		push	0
+		push	FILE_ATTRIBUTE_NORMAL				
+		push	OPEN_EXISTING										;DO NOT MAKE NEW
+		push	0
+		push	0
+		push	FILE_SHARE_READ										;OPEN FOR READING
+		push	OFFSET filename
+		call	CreateFileA											;ATTEMPTS OPENING, MOVES FILEHANDLER INTO EAX, IF VALID, WILL BE FILEHANDLER TO NAVIGATE THE FILE WITH
+		mov		fileHandle, EAX
+
+	;CHECK IF FILE IS VALID NAME OR EXIT PROGRAM					
+	cmp		eax,	INVALID_HANDLE_VALUE							;INVALID VALUE FFFFFFFFFF... 
+	jne		fileOpenGood
+	xor		EDX,	EDX
+	mov		EDX,	OFFSET	fileOpenErrPrompt						;USER MESSED UP, PROBABLY
+	call	WriteString									
+	call	crlf
+	jmp		getUserFile
+
+	;CHECK IF THE FILE SIZE CAN EVEN FIT THE PROGRAM OR IF IT CAN BE READ
+	fileOpenGood:
+		mov		EDX,	OFFSET	BUFFER
+		mov		ECX,	BUFFER_SIZE
+		call	ReadFromFile										;IF THERE IS AN ERROR READING, SEND ERROR
+		jnc		checkBufferSize
+
+		xor		EDX,	EDX	
+		mov		EDX,	OFFSET	READERROR							;READ ERROR
+		call	WriteString											;OUTPUT FOR PROMPT
+		call	crlf
+		jmp		getUserFile
+
+	checkBufferSize:
+		mov		[bytesRead],	EAX									;COPY NUM BYTES READ INTO A COUNTER
+
+		cmp		EAX,	BUFFER_SIZE
+		jb		inputKey										
+		mov		EDX,	OFFSET	BUFFERERROR							;BUFFER SIZE ERROR
+		call	WriteString											;OUTPUT FOR PROMPT
+		call	crlf
+		jmp		getUserFile
+
+	;TELLS USER TO INPUT THEIR KEY
+	inputKey:
+		xor		EDX,	EDX
+		mov		EDX,	OFFSET	keyPrompt							;LETS GET THE USER KEY
+		call	WriteString
+		call	crlf
+
+		mov		EDX,	OFFSET	userKey
+		mov		ECX,	SIZEOF	userKey
+		call	ReadString											;READ STRING INPUT FOR FILENAME
+		call	crlf
+
+		mov		[userKeySize],	EAX
+
+	;ENCRYPTING THE FILE
+	xor		EDX,	EDX
+	mov		EDX,	OFFSET	encryptPrompt							;LETS GET THE USER KEY
+	call	WriteString
+	call	crlf
+	call	crlf
+
+	;XOR ENCRYPTION BASIC
+		xor		EBX,	EBX											;PREP REGISTERS
+		xor		ECX,	ECX
+		xor		ESI,	ESI
+		xor		EDI,	EDI
+		xor		EAX,	EAX											;COUNTER FOR THE KEY POSITION
+
+		mov		ECX,	bytesRead									;FOR HOW MANY STUFF THERE WAS, HOLDS SIZE OF BUFFER
+		mov		ESI,	OFFSET		BUFFER
+		mov		EDI,	OFFSET		userKey
+
+	XOR_Encrypt:
+		mov		BL,		[EDI]
+		xor		[ESI],	BL
+
+		inc		ESI													;INCREMENT BUFFER ARR
+		inc		EAX													;INCREMENT THE KEY COUNT
+		cmp		EAX,	[userKeySize]
+		je		resetKeyCount
+		jmp		skipReset
+
+		resetKeyCount:
+			mov		EAX,	0
+			mov		EDI,	OFFSET		userKey
+			jmp		endOfXOR
+
+		skipReset:
+			inc		EDI
+
+		endOfXOR:
+			;END OF STATEMENTS
+			dec		ECX
+			jnz		XOR_Encrypt
+
+	;SANITY
+		xor		EDX,	EDX
+		mov		EDX,	OFFSET	BUFFER							;LETS GET THE USER KEY
+		call	WriteString
+		call	crlf
+
+	;CLOSE FILE
+	push	fileHandle
+	call	CloseHandle
+	xor		EAX,	EAX
+
+
+	;OPEN FILE FOR WRITING
+		push	0
+		push	FILE_ATTRIBUTE_NORMAL				
+		push	OPEN_EXISTING										;DO NOT MAKE NEW
+		push	0
+		push	0
+		push	FILE_SHARE_WRITE									;OPEN FOR READING
+		push	OFFSET filename
+		call	CreateFileA											;ATTEMPTS OPENING, MOVES FILEHANDLER INTO EAX, IF VALID, WILL BE FILEHANDLER TO NAVIGATE THE FILE WITH
+		mov		fileHandle, EAX
+
+	;SETTING THE FILE POINTER
+		push	FILE_BEGIN
+		push	0
+		push	0
+		push	fileHandle
+		call	SetFilePointer
+
+	;WRITING BUFFER TO FILE
+		push	0
+		push	0	
+		push	bytesRead											;HOW MANY BYTES TO BE WRITTEN
+		push	OFFSET	BUFFER										;BUFFER TO WRITE INTO FILE
+		push	fileHandle
+		call	WriteFile
+
+	;CLOSE FILE
+	push	fileHandle
+	call	CloseHandle
+
+	;EXITS THE ENTIRE PROGRAM
+	exitProgram:
+	call	crlf
+	xor		EDX,	EDX	
+	mov		EDX,	OFFSET	goodbyePrompt								 
+	call	crlf
+
+;MAIN CODE ENDS HERE
+INVOKE ExitProcess, 0
+main ENDP
+END main
